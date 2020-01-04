@@ -22,4 +22,4 @@ before_script:
 script:
   - ./gradlew build
   - ./gradlew publish
-  - ./gradlew docker
+  - ./gradlew docker dockerPush
