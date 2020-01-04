@@ -1,0 +1,25 @@
+dist: trusty
+language: java
+install: true
+
+os: linux
+
+services:
+  - docker
+
+before_cache:
+  - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
+  - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+
+cache:
+  directories:
+    - $HOME/.gradle/caches/
+    - $HOME/.gradle/wrapper/
+
+before_script:
+  - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD" docker.pkg.github.com
+
+script:
+  - ./gradlew build
+  - ./gradlew publish
+  - ./gradlew docker
