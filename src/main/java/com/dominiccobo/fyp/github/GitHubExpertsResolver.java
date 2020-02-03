@@ -2,10 +2,7 @@ package com.dominiccobo.fyp.github;
 
 import com.dominiccobo.fyp.context.api.queries.AssociatedExpertsQuery;
 import com.dominiccobo.fyp.context.listeners.ExpertsQueryListener;
-import com.dominiccobo.fyp.context.models.ContactDetails;
-import com.dominiccobo.fyp.context.models.Expert;
-import com.dominiccobo.fyp.context.models.ExpertTopic;
-import com.dominiccobo.fyp.context.models.QueryContext;
+import com.dominiccobo.fyp.context.models.*;
 import com.dominiccobo.fyp.context.models.git.GitContext;
 import com.dominiccobo.fyp.context.models.git.GitRemoteIdentifier;
 import com.dominiccobo.fyp.context.models.git.GitRemoteURL;
@@ -18,9 +15,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Component
 public class GitHubExpertsResolver implements ExpertsQueryListener {
@@ -36,29 +34,21 @@ public class GitHubExpertsResolver implements ExpertsQueryListener {
 
     @QueryHandler
     @Override
-    public List<Expert> on(AssociatedExpertsQuery associatedExpertsQuery) {
-        QueryContext qryContext = associatedExpertsQuery.getContext();
-        List<Expert> experts = fetchExpertsGivenSufficientGitContext(qryContext);
-        LOG.info("Size was: {}", experts.size());
-        return experts;
+    public List<Expert> on(AssociatedExpertsQuery query) {
+        LOG.info("Received query for associated work items");
+        QueryContext queryContext = query.getContext();
+        Pagination pagination = query.getPagination();
+        return fetchExpertsGivenSufficientGitContext(queryContext, pagination).collect(Collectors.toList());
     }
 
-    private List<Expert> fetchExpertsGivenSufficientGitContext(QueryContext context) {
+    private Stream<Expert> fetchExpertsGivenSufficientGitContext(QueryContext context, Pagination pagination) {
         if (!context.getGitContext().isPresent()) {
-            return new ArrayList<>();
+            return Stream.empty();
         }
         else {
             GitContext gitContext = context.getGitContext().get();
-            return transformCollaboratorsToExpert(fetchExpertsForRemotes(gitContext));
+            return fetchExpertsForRemotes(gitContext, pagination).map(this::transformCollaboratorToExpert);
         }
-    }
-
-    private List<Expert> transformCollaboratorsToExpert(List<Collaborator> collaborators) {
-        List<Expert> experts = new ArrayList<>();
-        for (Collaborator collaborator : collaborators) {
-            experts.add(transformCollaboratorToExpert(collaborator));
-        }
-        return experts;
     }
 
     private Expert transformCollaboratorToExpert(Collaborator collaborator) {
@@ -70,27 +60,23 @@ public class GitHubExpertsResolver implements ExpertsQueryListener {
                 .build();
     }
 
-    private List<Collaborator>  fetchExpertsForRemotes(GitContext gitContext) {
+    private Stream<Collaborator> fetchExpertsForRemotes(GitContext gitContext, Pagination pagination) {
         if (!gitContext.getRemotes().isPresent()) {
-            return new ArrayList<>();
+            return Stream.empty();
         }
         else {
-            List<Collaborator> collaborators = new ArrayList<>();
             Map<GitRemoteIdentifier, GitRemoteURL> remotes = gitContext.getRemotes().get();
-            for (Map.Entry<GitRemoteIdentifier, GitRemoteURL> remote : remotes.entrySet()) {
-                collaborators.addAll(fetchExpertsForRemote(remote));
-            }
-            return collaborators;
+            return remotes.entrySet().stream().flatMap(gitRemoteURL -> fetchExpertsForRemote(gitRemoteURL, pagination));
         }
     }
 
-    private List<Collaborator> fetchExpertsForRemote(Map.Entry<GitRemoteIdentifier, GitRemoteURL> remote) {
+    private Stream<Collaborator> fetchExpertsForRemote(Map.Entry<GitRemoteIdentifier, GitRemoteURL> remote, Pagination pagination) {
         String remoteUrl = remote.getValue().getUrl();
         GitRepoDetails gitRepoDetails = GitRepoDetails.from(remoteUrl);
 
         if(gitRepoDetails == null) {
-            return new ArrayList<>();
+            return Stream.empty();
         }
-        return api.getCollaborators(gitRepoDetails);
+        return api.getCollaborators(gitRepoDetails, pagination);
     }
 }

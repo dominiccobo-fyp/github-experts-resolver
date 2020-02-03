@@ -2,10 +2,7 @@ package com.dominiccobo.fyp.github;
 
 import com.dominiccobo.fyp.context.api.queries.AssociatedExpertsQuery;
 import com.dominiccobo.fyp.context.listeners.ExpertsQueryListener;
-import com.dominiccobo.fyp.context.models.ContactDetails;
-import com.dominiccobo.fyp.context.models.Expert;
-import com.dominiccobo.fyp.context.models.ExpertTopic;
-import com.dominiccobo.fyp.context.models.QueryContext;
+import com.dominiccobo.fyp.context.models.*;
 import com.dominiccobo.fyp.context.models.git.GitContext;
 import com.dominiccobo.fyp.context.models.git.GitRemoteIdentifier;
 import com.dominiccobo.fyp.context.models.git.GitRemoteURL;
@@ -16,10 +13,10 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.any;
@@ -39,7 +36,7 @@ public class GitHubExpertsResolutionTest {
 
     @Test
     public void whenAssociatedExpertsQueriedAndRemoteIsNotGitHub_emptyResultsReturned() {
-        AssociatedExpertsQuery qry = new AssociatedExpertsQuery(buildNonGitHubQueryContext());
+        AssociatedExpertsQuery qry = new AssociatedExpertsQuery(buildNonGitHubQueryContext(), new Pagination(0, 100));
         List<Expert> result = fixture.on(qry);
         assertThat(result).isEmpty();
     }
@@ -54,9 +51,8 @@ public class GitHubExpertsResolutionTest {
         String EMAIL_MODE  = "Email";
         String EMAIL_ADDRESS = "sample@example.com";
 
-        when(api.getCollaborators(any())).thenReturn(Collections.singletonList(
-                new SampleCollaborator(EMAIL_ADDRESS, GITHUB_PROFILE, EXPERT_NAME)
-        ));
+        Stream stream = Stream.of(new SampleCollaborator(EMAIL_ADDRESS, GITHUB_PROFILE, EXPERT_NAME));
+        when(api.getCollaborators(any(), any())).thenReturn(stream);
 
         Expert expectedExpert = new Expert.Builder()
                 .setExpertName(EXPERT_NAME)
@@ -65,7 +61,7 @@ public class GitHubExpertsResolutionTest {
                 .withContactDetails(new SampleContactDetails(EMAIL_MODE, EMAIL_ADDRESS))
                 .build();
 
-        AssociatedExpertsQuery qry = new AssociatedExpertsQuery(buildGitHubQueryContext());
+        AssociatedExpertsQuery qry = new AssociatedExpertsQuery(buildGitHubQueryContext(), new Pagination(0, 100));
         List<Expert> result = fixture.on(qry);
         assertThat(result).isNotEmpty();
         assertThat(result).contains(expectedExpert);
